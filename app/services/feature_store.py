@@ -2,6 +2,7 @@ from app.services.feature_compute import compute_feature
 from app.models.feature import Feature
 from app.models.feature_version import FeatureVersion
 from app.models.feature_value import FeatureValue
+from fastapi import HTTPException
 
 
 FEATURE_CACHE = {}
@@ -53,18 +54,13 @@ def create_feature_version(db, feature, raw_table, logic):
 
     return new_version
 
-
 def get_feature_vector(db, entity_id, feature_names):
-    """
-    Fetch latest feature values for a given entity.
-    """
-
     feature_vector = {}
 
     for name in feature_names:
         cache_key = (str(entity_id), name)
 
-        # 1️⃣ Check cache first
+        # 1️⃣ Cache check
         if cache_key in FEATURE_CACHE:
             feature_vector[name] = FEATURE_CACHE[cache_key]
             continue
@@ -72,7 +68,10 @@ def get_feature_vector(db, entity_id, feature_names):
         # 2️⃣ Validate feature exists
         feature = db.query(Feature).filter(Feature.name == name).first()
         if not feature:
-            raise ValueError(f"Feature '{name}' not found")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Feature '{name}' not found"
+            )
 
         # 3️⃣ Fetch latest feature value
         value = (
@@ -86,11 +85,12 @@ def get_feature_vector(db, entity_id, feature_names):
         )
 
         if not value:
-            raise ValueError(
-                f"No value found for feature '{name}' and entity '{entity_id}'"
+            raise HTTPException(
+                status_code=404,
+                detail=f"No value found for feature '{name}' and entity '{entity_id}'"
             )
 
-        # 4️⃣ Cache and return value
+        # 4️⃣ Cache & return
         FEATURE_CACHE[cache_key] = value.value
         feature_vector[name] = value.value
 
